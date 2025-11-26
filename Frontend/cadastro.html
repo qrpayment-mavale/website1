@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Administração de Usuários</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        h1, h2 { color: #333; border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-top: 20px; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 10px; margin: 5px 0 10px 0; display: inline-block; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #5cb85c; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; float: right; margin-left: 10px; transition: background-color 0.3s; }
+        button:hover { background-color: #4cae4c; }
+        #removeUser button { background-color: #d9534f; }
+        #removeUser button:hover { background-color: #c9302c; }
+        #userList { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        #userList th, #userList td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        #userList th { background-color: #f2f2f2; }
+        .message { padding: 10px; margin-top: 15px; border-radius: 4px; font-weight: bold; }
+        .success { background-color: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6; }
+        .error { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Painel de Administração de Pagamentos</h1>
+        
+        <div class="message" id="messageBox" style="display: none;"></div>
+
+        <h2>Cadastrar Novo Usuário</h2>
+        <form id="addUser">
+            <label for="newUserId">ID do Usuário </label>
+            <input type="text" id="newUserId" required>
+
+            <label for="newName">Nome</label>
+            <input type="text" id="newName" required>
+
+            <label for="newBalance">Saldo Inicial (MT)</label>
+            <input type="number" id="newBalance" step="0.01" value="0.00" required>
+            
+            <button type="submit">Cadastrar Usuário</button>
+        </form>
+
+        <hr style="clear: both; margin: 30px 0;">
+
+        <h2>Remover Usuário</h2>
+        <form id="removeUser">
+            <label for="removeUserId">ID do Usuário a Remover</label>
+            <input type="text" id="removeUserId" required>
+            <button type="submit" style="background-color: #d9534f;">Remover Usuário</button>
+        </form>
+
+        <hr style="clear: both; margin: 30px 0;">
+
+        <h2>Lista de Usuários e Saldos Atuais</h2>
+        <button onclick="fetchUsers()">Atualizar Lista</button>
+        <table id="userList">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome</th>
+                    <th>Saldo (MT)</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
+
+    <script>
+        
+        const API_URL = 'http://localhost:3000/api'; // MUDAR SE O BACKEND ESTIVER EM OUTRA PORTA
+
+        // Função para exibir mensagens de status
+        function showMessage(type, text) {
+            const box = document.getElementById('messageBox');
+            box.style.display = 'block';
+            box.className = 'message ' + type;
+            box.textContent = text;
+            setTimeout(() => { box.style.display = 'none'; }, 5000); // Esconde após 5 segundos
+        }
+
+        // Função para buscar e exibir a lista de usuários (GET /api/users)
+        async function fetchUsers() {
+            const listBody = document.querySelector('#userList tbody');
+            listBody.innerHTML = '<tr><td colspan="3">Carregando usuários...</td></tr>';
+            try {
+                const response = await fetch(`${API_URL}/users`);
+                
+                if (!response.ok) {
+                    throw new Error(`Erro de rede: ${response.status} ${response.statusText}`);
+                }
+
+                const users = await response.json();
+
+                listBody.innerHTML = ''; // Limpa a lista
+                users.forEach(user => {
+                    const row = listBody.insertRow();
+                    row.insertCell().textContent = user.user_id;
+                    row.insertCell().textContent = user.name;
+                    row.insertCell().textContent = parseFloat(user.balance || 0).toFixed(2);
+                });
+
+            } catch (error) {
+                listBody.innerHTML = '<tr><td colspan="3" class="error">**Erro de Conexão.** Verifique se o backend está rodando na porta 3000.</td></tr>';
+                console.error('Erro ao buscar usuários:', error);
+            }
+        }
+
+        // Evento para Cadastrar Usuário (POST /api/users)
+        document.getElementById('addUser').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('newUserId').value.trim();
+            const name = document.getElementById('newName').value.trim();
+            const initialBalance = parseFloat(document.getElementById('newBalance').value);
+
+            if (!userId || !name || isNaN(initialBalance)) {
+                showMessage('error', 'Preencha todos os campos corretamente.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, name, initialBalance })
+                });
+
+                const data = await response.json();
+                if (response.ok) { 
+                    showMessage('success', data.message);
+                    document.getElementById('addUser').reset(); // Limpa o formulário
+                    fetchUsers();
+                } else {
+                    showMessage('error', data.message || `Erro ao cadastrar (Código: ${response.status}).`);
+                }
+            } catch (error) {
+                showMessage('error', 'Erro de conexão com o servidor ao cadastrar. O servidor está offline?');
+                console.error('Erro de conexão:', error);
+            }
+        });
+
+        // Evento para Remover Usuário (DELETE /api/users/:userId)
+        document.getElementById('removeUser').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('removeUserId').value.trim();
+
+            if (!userId) {
+                showMessage('error', 'Por favor, insira o ID do usuário a remover.');
+                return;
+            }
+
+            if (!confirm(`Tem certeza que deseja remover o usuário ${userId}? Esta ação é irreversível.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/users/${userId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    showMessage('success', data.message);
+                    document.getElementById('removeUser').reset(); // Limpa o formulário
+                    fetchUsers();
+                } else {
+                    showMessage('error', data.message || `Erro ao remover (Código: ${response.status}).`);
+                }
+            } catch (error) {
+                showMessage('error', 'Erro de conexão com o servidor ao remover. O servidor está offline?');
+                console.error('Erro de conexão:', error);
+            }
+        });
+
+        // Carrega a lista de usuários ao iniciar a página
+        document.addEventListener('DOMContentLoaded', fetchUsers);
+    </script>
+</body>
+</html>

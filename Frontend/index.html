@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Pagamento Digital MZN (Real)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style> 
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f0f4f8; }
+        .chapa-card { background: linear-gradient(145deg, #ffffff, #e6e6e6); box-shadow: 12px 12px 24px #d9d9d9, -12px -12px 24px #ffffff; }
+        .oled-display { background-color: #000; color: #39ff14; font-size: 0.8rem; padding: 0.5rem; border: 2px solid #39ff14; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        <div id="frontend-passenger" class="lg:col-span-2 p-6 chapa-card rounded-xl">
+            <h1 class="text-3xl font-bold mb-4 text-gray-800">1. Tela de Pagamento do Passageiro</h1>
+            <p class="text-gray-600 mb-6">Página aberta após escanear o QR Code fixo no carro (ID: <span id="device-id-display" class="font-mono font-semibold text-blue-600"></span>).</p>
+            
+            <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
+                <p class="font-semibold text-blue-800">Tarifa Padrão: 12 MT</p>
+                <p class="text-sm text-blue-700">Utilize os (1001, 2002, 3003,4004) para testar .</p>
+            </div>
+
+            <form id="payment-form" class="space-y-4">
+                <div>
+                    <label for="user-id" class="block text-sm font-medium text-gray-700">ID do Usuário (Matrícula Digital):</label>
+                    <input type="text" id="user-id" value="1001" required
+                                class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                </div>
+                <div>
+                    <label for="fare-amount" class="block text-sm font-medium text-gray-700">Valor da Tarifa (MT):</label>
+                    <input type="number" id="fare-amount" value="12" required disabled
+                                class="mt-1 block w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg shadow-sm">
+                </div>
+                
+                <button type="submit" id="pay-button"
+                        class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-300 ease-in-out">
+                    Pagar Tarifa (12 MT)
+                </button>
+            </form>
+            
+            <div id="payment-message" class="mt-6 p-3 rounded-lg text-center font-medium hidden"></div>
+
+        </div>
+
+        <!--
+        
+
+        <div id="hardware-simulation" class="lg:col-span-1 p-6 bg-gray-800 rounded-xl shadow-2xl">
+            <h2 class="text-xl font-bold mb-4 text-white"> Feedback no ESP32 Real</h2>
+            <p class="text-gray-400 mb-6 text-sm">Esta é apenas uma prévia visual para a web. O ESP32 estara no  trabalho.</p>
+            
+            <div class="mb-6">
+                <p class="text-sm font-mono text-gray-300 mb-1">Display OLED (Status API)</p>
+                <div id="oled-display-mock" class="oled-display rounded-md text-center h-16 flex items-center justify-center">
+                    Aguardando Pagamento...
+                </div>
+            </div>
+
+            <div>
+                <p class="text-sm font-mono text-gray-300 mb-2"> LED</p>
+                <div class="flex justify-around items-center space-x-4">
+                    <div class="text-center">
+                        <div id="led-green" class="w-8 h-8 rounded-full bg-gray-700 border-2 border-green-500 transition-all duration-300"></div>
+                        <span class="text-xs text-green-500 mt-1 block">Sucesso (Verde)</span>
+                    </div>
+                    <div class="text-center">
+                        <div id="led-red" class="w-8 h-8 rounded-full bg-gray-700 border-2 border-red-500 transition-all duration-300"></div>
+                        <span class="text-xs text-red-500 mt-1 block">Falha (Vermelho)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        -->
+    </div>
+
+    <script>
+        // Variáveis Globais de Conexão
+        const DEVICE_ID = "MOC001"; 
+        const FARE_AMOUNT = 12;
+      
+        const API_BASE_URL = "http://localhost:3000/api"; 
+
+        // Referências DOM
+        const deviceIdDisplay = document.getElementById('device-id-display');
+        const paymentForm = document.getElementById('payment-form');
+        const userIdInput = document.getElementById('user-id');
+        const paymentMessage = document.getElementById('payment-message');
+        const payButton = document.getElementById('pay-button');
+        
+        deviceIdDisplay.textContent = DEVICE_ID;
+        
+        // Simulação Visual do Hardware (Para acompanhar na tela do PC)
+        const oledDisplay = document.getElementById('oled-display-mock');
+        const ledGreen = document.getElementById('led-green');
+        const ledRed = document.getElementById('led-red');
+        
+        // Função que envia a transação para o Backend
+        async function processPayment(userId, amount, deviceId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/pay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, deviceId, amount })
+                });
+                
+                // Atualiza o display mock com status de processamento
+                updateHardwareVisualsMock("Processando", "Aguarde...");
+
+                const result = await response.json();
+                return result;
+
+            } catch (error) {
+                console.error('Erro na comunicação com a API de pagamento:', error);
+                return { success: false, message: "Erro de rede ou servidor." };
+            }
+        }
+        
+        // Evento de Pagamento
+        paymentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userId = userIdInput.value.trim();
+            payButton.disabled = true;
+            paymentMessage.textContent = "Processando pagamento...";
+            paymentMessage.className = "mt-6 p-3 rounded-lg text-center font-medium bg-yellow-100 text-yellow-800";
+            paymentMessage.style.display = 'block';
+
+            const result = await processPayment(userId, FARE_AMOUNT, DEVICE_ID);
+
+            if (result.success) {
+                paymentMessage.textContent = result.message;
+                paymentMessage.className = "mt-6 p-3 rounded-lg text-center font-medium bg-green-100 text-green-800";
+            } else {
+                paymentMessage.textContent = `Falha no Pagamento: ${result.message}`;
+                paymentMessage.className = "mt-6 p-3 rounded-lg text-center font-medium bg-red-100 text-red-800";
+            }
+
+            payButton.disabled = false;
+            
+            // Simulação visual: Força a atualização do mock após o pagamento
+            checkStatusMock(); 
+
+            // Limpa a mensagem após um tempo
+            setTimeout(() => {
+                paymentMessage.style.display = 'none';
+            }, 5000);
+        });
+
+        // --- Lógica de Simulação do Hardware na Tela do PC ---
+
+        // Função que simula o Polling do ESP32, mas para o mock visual no PC
+        async function checkStatusMock() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/status/${DEVICE_ID}`);
+                const statusResponse = await response.json();
+                
+                updateHardwareVisualsMock(statusResponse.status, statusResponse.message);
+                
+            } catch (error) {
+                updateHardwareVisualsMock("Erro", "Falha de Rede/API!");
+            }
+        }
+
+        // Atualiza o display OLED e os LEDs virtuais (mock)
+        function updateHardwareVisualsMock(status, message) {
+            oledDisplay.innerHTML = `<div class="font-bold">${status}</div><div class="text-xs mt-1">${message}</div>`;
+
+            ledGreen.classList.remove('bg-green-500', 'shadow-xl');
+            ledRed.classList.remove('bg-red-500', 'shadow-xl');
+            ledGreen.classList.add('bg-gray-700');
+            ledRed.classList.add('bg-gray-700');
+            
+            if (status === "Sucesso") {
+                ledGreen.classList.add('bg-green-500', 'shadow-xl');
+                ledGreen.classList.remove('bg-gray-700');
+            } else if (status === "Recusado" || status === "Erro") {
+                ledRed.classList.add('bg-red-500', 'shadow-xl');
+                ledRed.classList.remove('bg-gray-700');
+            }
+        }
+
+        // Inicia o Polling visual no PC para acompanhar o status do servidor
+        window.onload = function() {
+            setInterval(checkStatusMock, 1000); // Poll a cada 1 segundo
+            updateHardwareVisualsMock("Aguardando", "Pronto para pagar...");
+        };
+    </script>
+</body>
+</html>

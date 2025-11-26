@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Painel Administrativo - Pagamento MZN (Modal)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f0f4f8; }
+        .dashboard-card {
+            background: linear-gradient(145deg, #ffffff, #e6e6e6);
+            box-shadow: 8px 8px 16px #d9d9d9, -8px -8px 16px #ffffff;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+        }
+        .text-green-revenue { color: #22c55e; }
+        .text-blue-users { color: #3b82f6; }
+        /* Modal transitions */
+        .modal-backdrop { background: rgba(0,0,0,0.4); }
+    </style>
+</head>
+<body class="min-h-screen flex items-start justify-center p-6">
+
+    <div class="max-w-6xl w-full space-y-8">
+
+        <h1 class="text-4xl font-extrabold text-gray-800 text-center mb-6">Painel de Controle</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="dashboard-card bg-green-50 border border-green-200">
+                <p class="text-lg font-medium text-green-700 mb-2">TOTAL ARRECADADO (DEVICE: MOC001)</p>
+                <p id="total-revenue" class="text-5xl font-extrabold text-green-revenue">0.00 MT</p> 
+                <p class="text-sm text-gray-500 mt-2">Total de pagamentos na rota.</p>
+            </div>
+
+            <div class="dashboard-card bg-blue-50 border border-blue-200">
+                <p class="text-lg font-medium text-blue-700 mb-2">TOTAL DE USUÁRIOS CADASTRADOS</p>
+                <p id="total-users" class="text-5xl font-extrabold text-blue-users">0</p> 
+                <p class="text-sm text-gray-500 mt-2">Contas aptas a pagar a tarifa.</p>
+            </div>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">Saldo Detalhado dos Usuários</h2>
+                <div class="flex gap-3 items-center">
+                    <button id="refresh-users-button" 
+                            class="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none">
+                        Atualizar
+                    </button>
+
+                    <!-- Botão que abre o modal -->
+                    <button id="open-user-modal"
+                            class="px-5 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none">
+                        Gerenciar Usuários
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">NOME</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">SALDO (MT)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body" class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="3" class="px-6 py-4 text-center text-gray-500">Carregando usuários...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="users-loading-message" class="text-center py-4 text-gray-500"></div>
+        </div>
+
+    </div>
+
+    <!-- ========================= -->
+    <!-- MODAL: Gerenciamento de Usuários -->
+    <!-- ========================= -->
+    <div id="user-modal" class="fixed inset-0 z-40 hidden items-center justify-center" aria-hidden="true" aria-modal="true" role="dialog">
+        <!-- Backdrop -->
+        <div id="modal-backdrop" class="modal-backdrop absolute inset-0"></div>
+
+        <!-- Modal panel -->
+        <div class="relative w-full max-w-3xl mx-4">
+            <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+                <div class="px-6 py-4 border-b flex justify-between items-center">
+                    <h3 class="text-xl font-semibold text-gray-800">Gerenciamento de Usuários</h3>
+                    <button id="close-user-modal" aria-label="Fechar" class="text-gray-500 hover:text-gray-800">
+                        ✕
+                    </button>
+                </div>
+
+                <div class="p-6 space-y-6">
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                        <!-- Adicionar usuário -->
+                        <div class="border rounded-lg p-4">
+                            <h4 class="font-semibold mb-3">Adicionar Novo Usuário</h4>
+                            <form id="add-user-form" class="space-y-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">ID do Usuário</label>
+                                    <input id="new-user-id" required type="text" class="mt-1 block w-full px-3 py-2 border rounded-md" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Nome</label>
+                                    <input id="new-user-name" required type="text" class="mt-1 block w-full px-3 py-2 border rounded-md" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Saldo Inicial (MT)</label>
+                                    <input id="new-user-balance" required type="number" step="0.01" value="0.00" class="mt-1 block w-full px-3 py-2 border rounded-md" />
+                                </div>
+                                <button type="submit" class="w-full py-2 px-3 bg-green-600 text-white rounded-md hover:bg-green-700">Adicionar Usuário</button>
+                                <div id="add-user-message" class="text-sm text-center mt-2"></div>
+                            </form>
+                        </div>
+
+                        <!-- Remover usuário -->
+                        <div class="border rounded-lg p-4">
+                            <h4 class="font-semibold mb-3">Remover Usuário</h4>
+                            <form id="delete-user-form" class="space-y-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">ID do Usuário</label>
+                                    <input id="delete-user-id" required type="text" class="mt-1 block w-full px-3 py-2 border rounded-md" />
+                                </div>
+                                <button type="submit" class="w-full py-2 px-3 bg-red-600 text-white rounded-md hover:bg-red-700">Remover Usuário</button>
+                                <div id="delete-user-message" class="text-sm text-center mt-2"></div>
+                            </form>
+                        </div>
+
+                    </div>
+
+                    <!-- Footer do modal -->
+                    <div class="flex justify-end gap-3">
+                        <button id="modal-refresh-users" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Atualizar Lista</button>
+                        <button id="modal-close-bottom" class="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Fechar</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================= -->
+    <!-- SCRIPTS -->
+    <!-- ========================= -->
+    <script>
+        // Configuração da API
+        const API_BASE_URL = "http://localhost:3000/api";
+        const DEVICE_ID = "MOC001";
+
+        // Elementos do painel
+        const totalRevenueElement = document.getElementById('total-revenue');
+        const totalUsersElement = document.getElementById('total-users');
+        const usersTableBody = document.getElementById('users-table-body');
+        const usersLoadingMessage = document.getElementById('users-loading-message');
+        const refreshUsersButton = document.getElementById('refresh-users-button');
+
+        // Elementos do modal
+        const userModal = document.getElementById('user-modal');
+        const modalBackdrop = document.getElementById('modal-backdrop');
+        const openUserModalBtn = document.getElementById('open-user-modal');
+        const closeUserModalBtn = document.getElementById('close-user-modal');
+        const modalCloseBottomBtn = document.getElementById('modal-close-bottom');
+        const modalRefreshUsersBtn = document.getElementById('modal-refresh-users');
+
+        // Form elementos
+        const addUserForm = document.getElementById('add-user-form');
+        const addUserMessage = document.getElementById('add-user-message');
+        const deleteUserForm = document.getElementById('delete-user-form');
+        const deleteUserMessage = document.getElementById('delete-user-message');
+
+        // Abrir modal com foco
+        function openModal() {
+            userModal.classList.remove('hidden');
+            userModal.classList.add('flex');
+            userModal.setAttribute('aria-hidden', 'false');
+            // coloca foco no primeiro campo
+            setTimeout(() => document.getElementById('new-user-id').focus(), 100);
+            // evita rolagem do body
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            userModal.classList.add('hidden');
+            userModal.classList.remove('flex');
+            userModal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            // limpa mensagens
+            addUserMessage.textContent = '';
+            deleteUserMessage.textContent = '';
+        }
+
+        // Fecha modal ao clicar no backdrop
+        modalBackdrop.addEventListener('click', closeModal);
+        openUserModalBtn.addEventListener('click', openModal);
+        closeUserModalBtn.addEventListener('click', closeModal);
+        modalCloseBottomBtn.addEventListener('click', closeModal);
+
+        // Fecha modal com Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && userModal.classList.contains('flex')) {
+                closeModal();
+            }
+        });
+
+        // --- Funções API ---
+        async function fetchTotalRevenue() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/revenue/${DEVICE_ID}`);
+                if (!res.ok) throw new Error('Erro fetching revenue');
+                const data = await res.json();
+                totalRevenueElement.textContent = `${parseFloat(data.totalRevenue).toFixed(2)} MT`;
+            } catch (err) {
+                console.error(err);
+                totalRevenueElement.textContent = "ERRO MT";
+            }
+        }
+
+        async function fetchUsers() {
+            usersTableBody.innerHTML = `<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Carregando usuários...</td></tr>`;
+            usersLoadingMessage.textContent = "Aguarde...";
+            refreshUsersButton.disabled = true;
+            try {
+                const res = await fetch(`${API_BASE_URL}/users`);
+                if (!res.ok) throw new Error('Erro fetching users');
+                const users = await res.json();
+
+                totalUsersElement.textContent = users.length;
+                usersTableBody.innerHTML = "";
+                users.forEach(user => {
+                    const tr = document.createElement('tr');
+
+                    const tdId = document.createElement('td');
+                    tdId.className = "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900";
+                    tdId.textContent = user.user_id ?? user.userId ?? "";
+
+                    const tdName = document.createElement('td');
+                    tdName.className = "px-6 py-4 whitespace-nowrap text-sm text-gray-500";
+                    tdName.textContent = user.name ?? "";
+
+                    const tdBalance = document.createElement('td');
+                    tdBalance.className = "px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold";
+                    const balanceVal = parseFloat(user.balance ?? user.initialBalance ?? 0);
+                    tdBalance.textContent = `${balanceVal.toFixed(2)} MT`;
+
+                    tr.appendChild(tdId);
+                    tr.appendChild(tdName);
+                    tr.appendChild(tdBalance);
+
+                    usersTableBody.appendChild(tr);
+                });
+
+                if (users.length === 0) {
+                    usersTableBody.innerHTML = `<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Nenhum usuário cadastrado.</td></tr>`;
+                }
+
+                usersLoadingMessage.textContent = "";
+            } catch (err) {
+                console.error(err);
+                usersTableBody.innerHTML = `<tr><td colspan="3" class="px-6 py-4 text-center text-red-500">Erro ao carregar usuários.</td></tr>`;
+                usersLoadingMessage.textContent = "Erro ao buscar dados. Veja console.";
+            } finally {
+                refreshUsersButton.disabled = false;
+            }
+        }
+
+        // Botões para atualizar
+        refreshUsersButton.addEventListener('click', fetchUsers);
+        modalRefreshUsersBtn.addEventListener('click', fetchUsers);
+
+        // --- Adicionar usuário ---
+        addUserForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            addUserMessage.textContent = '';
+            const userId = document.getElementById('new-user-id').value.trim();
+            const name = document.getElementById('new-user-name').value.trim();
+            const initialBalance = parseFloat(document.getElementById('new-user-balance').value || 0);
+
+            if (!userId || !name) {
+                addUserMessage.className = 'text-sm text-red-600';
+                addUserMessage.textContent = 'Preencha ID e Nome.';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, name, initialBalance })
+                });
+                const result = await res.json();
+
+                if (res.ok && result.success !== false) {
+                    addUserMessage.className = 'text-sm text-green-600';
+                    addUserMessage.textContent = result.message ?? 'Usuário adicionado.';
+                    addUserForm.reset();
+                    fetchUsers();
+                } else {
+                    addUserMessage.className = 'text-sm text-red-600';
+                    addUserMessage.textContent = result.message ?? 'Erro ao adicionar.';
+                }
+            } catch (err) {
+                console.error(err);
+                addUserMessage.className = 'text-sm text-red-600';
+                addUserMessage.textContent = 'Erro de rede ou servidor.';
+            }
+        });
+
+        // --- Remover usuário ---
+        deleteUserForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            deleteUserMessage.textContent = '';
+            const userId = document.getElementById('delete-user-id').value.trim();
+
+            if (!userId) {
+                deleteUserMessage.className = 'text-sm text-red-600';
+                deleteUserMessage.textContent = 'Insira o ID do usuário.';
+                return;
+            }
+
+            if (!confirm(`Tem certeza que deseja remover o usuário ${userId}?`)) return;
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/users/${encodeURIComponent(userId)}`, {
+                    method: 'DELETE'
+                });
+                const result = await res.json();
+
+                if (res.ok && result.success !== false) {
+                    deleteUserMessage.className = 'text-sm text-green-600';
+                    deleteUserMessage.textContent = result.message ?? 'Usuário removido.';
+                    deleteUserForm.reset();
+                    fetchUsers();
+                } else {
+                    deleteUserMessage.className = 'text-sm text-red-600';
+                    deleteUserMessage.textContent = result.message ?? 'Erro ao remover.';
+                }
+            } catch (err) {
+                console.error(err);
+                deleteUserMessage.className = 'text-sm text-red-600';
+                deleteUserMessage.textContent = 'Erro de rede ou servidor.';
+            }
+        });
+
+        // Inicialização na carga da página
+        window.addEventListener('load', () => {
+            fetchTotalRevenue();
+            fetchUsers();
+            // atualiza receita periodicamente
+            setInterval(fetchTotalRevenue, 5000);
+        });
+    </script>
+
+</body>
+</html>
